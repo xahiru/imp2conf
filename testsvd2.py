@@ -16,19 +16,31 @@ import time
 
 # Load the movielens-100k dataset (download it if needed),
 # data = Dataset.load_builtin('jester')
+dataset_name ='ml-100k'
 data = Dataset.load_builtin('ml-100k')
-myalgo = True
-
+# data = Dataset.load_builtin('ml-latest-small')
+# data = Dataset.load_builtin('ml-1m')
+myalgo = False
+n_factors = 20
+i_imp_factors = False
 # sample random trainset and testset
 # test set is made of 25% of the ratings.
 trainset, testset = train_test_split(data,random_state=100, test_size=.25)
 
+#loggin param details
+print(dataset_name)
+print('myalgo =' +str(myalgo))
+print('n_factors =' +str(n_factors))
+# print('i_imp_factors =' +str(i_imp_factors))
+
+
 # We'll use the famous SVD algorithm.
-algo = SVDpp(random_state =100)
+algo = SVDpp(n_factors= n_factors, i_imp_factors=True, random_state =100)
+print('i_imp_factors =' +str(i_imp_factors))
 start = time.time()
 if myalgo:
 	print(myalgo)
-	algo2 = SVDpp(n_epochs=20,random_state =100)
+	algo2 = SVDpp(n_factors= n_factors, n_epochs=20,random_state =100)
 
 	raw2inner_id_users = {}
 	raw2inner_id_items = {}
