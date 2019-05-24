@@ -35,7 +35,7 @@ print('n_factors =' +str(n_factors))
 
 
 # We'll use the famous SVD algorithm.
-algo = SVDpp(n_factors= n_factors, i_imp_factors=True, random_state =100)
+algo = SVDpp(n_factors= n_factors, i_imp_factors=i_imp_factors, random_state =100)
 print('i_imp_factors =' +str(i_imp_factors))
 start = time.time()
 if myalgo:
