@@ -8,12 +8,18 @@ from surprise import Trainset
 from collections import defaultdict
 import numpy as np
 import matplotlib.pyplot as plt 
+import plotly.plotly as py
+import plotly.graph_objs as go
+from plotly.tools import FigureFactory as FF
 import copy as cp
 from joblib import Parallel
 from joblib import delayed
 import multiprocessing
 import time
 import surprise.dump
+import pandas as pd
+from os.path import join
+from surprise.builtin_datasets import get_dataset_dir
 
 # Load the movielens-100k dataset (download it if needed),
 # data = Dataset.load_builtin('jester')
@@ -26,26 +32,62 @@ data = Dataset.load_builtin(dataset_name)
 # data = Dataset.load_builtin('ml-1m')
 myalgo = True
 n_factors = 20
+n_epochs =  60
 i_imp_factors = False
+pminusq = True
+ptimesq = not pminusq
 # sample random trainset and testset
 # test set is made of 20% of the ratings.
 trainset, testset = train_test_split(data,random_state=100, test_size=.20)
 
+def load_dataset_for_stats(dataset_name='ml-100k'):
+	if dataset_name == 'ml-100k':
+		# file_path = os.path.expanduser('~/.surprise_data/ml-100k/ml-100k/u.data')
+		path=join(get_dataset_dir(), 'ml-100k/ml-100k/u.data')
+		ratings_df = pd.read_csv(path, sep='\t', names=['user_id', 'item_id', 'rating', 'timestamp'])
+	elif dataset_name == 'ml-1m':
+		path =join(get_dataset_dir(), 'ml-1m/ml-1m/ratings.dat')
+		# file_path = os.path.expanduser('~/.surprise_data/ml-100k/ml-100k/u.data')
+		ratings_df = pd.read_table(path, sep='::', names=['user_id', 'item_id', 'rating', 'timestamp'])
+	elif dataset_name == 'ml-latest-small':
+		path=join(get_dataset_dir(), 'ml-latest-small/ratings.csv')
+		ratings_df = pd.read_table(path, sep=',', names=['user_id', 'item_id', 'rating', 'timestamp'])
+	elif dataset_name == 'jester':
+		path=join(get_dataset_dir(), 'jester/jester_ratings.dat')
+		ratings_df = pd.read_table(path, sep='\t\t', names=['user_id', 'item_id', 'rating'])
+	else:
+		print('No dataset name given')
+	return ratings_df
+
+def graph_user_average_ratings_ply(dataset_name):
+	ratingdf = load_dataset_for_stats(dataset_name)
+	table = FF.create_table(ratingdf)
+	py.plot(table, filename='rating-data-sample')
+	# print(ratingdf.head(100))
+# graph_user_average_ratings_ply(dataset_name)
+
+def graph_user_average_ratings_matplot(dataset_name):
+	ratingdf = load_dataset_for_stats(dataset_name)
+	# plt.hist(ratingdf[0:1000], bins=np.arange(ratingdf[0:10].rating.min(), ratingdf[0:10].rating.max()+1))
+	plt.hist(ratingdf[0:100], bins=len(ratingdf[0:100].user_id))
+	plt.show()
+# graph_user_average_ratings_matplot(dataset_name)
 #loggin param details
 print(dataset_name)
 print('myalgo =' +str(myalgo))
 print('n_factors =' +str(n_factors))
-# print('i_imp_factors =' +str(i_imp_factors))
-print('first_potion = 1*item_pop')
+print('n_epochs =' +str(n_epochs))
+print('i_imp_factors =' +str(i_imp_factors))
+# print('first_potion = 1*item_pop')
 
 
 # We'll use the SVD ++ algorithm.
-algo = SVDpp(n_factors= n_factors, i_imp_factors=i_imp_factors, random_state =100)
+algo = SVDpp(n_factors= n_factors, i_imp_factors=i_imp_factors, random_state=100)
 print('i_imp_factors =' +str(i_imp_factors))
 start = time.time()
 if myalgo:
 	trainset2 = cp.deepcopy(trainset)
-	algo2 = SVDpp(n_factors= n_factors, n_epochs=20,random_state =100)
+	algo2 = SVDpp(n_factors= n_factors, n_epochs=n_epochs,random_state=100)
 
 	raw2inner_id_users = {}
 	raw2inner_id_items = {}
@@ -55,7 +97,7 @@ if myalgo:
 	# print(trainset2.ur)
 	# print('trainset2.ir')
 	# print(trainset2.ir)
-	print('trainset2.n_ratings3 = '+ str(trainset2.n_ratings))
+	print('trainset2.n_ratings = '+ str(trainset2.n_ratings))
 	# ircount = {}
 	# n_jobs = multiprocessing.cpu_count()
 	# print('n_jobs ='+str(n_jobs))
@@ -168,8 +210,14 @@ print(algo.qi)
 
 if myalgo:
 	print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>algo.pu - algo2.pu<<<<<after<<<<<<')
-	algo.pu = algo.pu - algo2.pu
-	algo.qi = algo.qi - algo2.qi
+	if pminusq:
+		# print('algo.pu - algo2.pu')
+		algo.pu = algo.pu - algo2.pu
+		algo.qi = algo.qi - algo2.qi
+	if ptimesq:
+		print('algo.pu * algo2.pu')
+		algo.pu = algo.pu * algo2.pu
+		algo.qi = algo.qi * algo2.qi
 	print('algo.pu')
 	print(algo.pu)
 	print('algo.qi')
@@ -182,6 +230,14 @@ predictions = algo.test(testset)
 # 	# print(t.ur[t.to_inner_uid(p.uid)])
 # 	print(p)
 
+print(dataset_name)
+print('myalgo =' +str(myalgo))
+print('n_factors =' +str(n_factors))
+print('n_epochs =' +str(n_epochs))
+if pminusq:
+	print('algo.pu - algo2.pu')
+if ptimesq:
+	print('algo.pu * algo2.pu')
 # Then compute RMSE
 accuracy.rmse(predictions)
 accuracy.mae(predictions)
