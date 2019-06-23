@@ -1,6 +1,7 @@
 from surprise import NMF
 from surprise import SVD
 from surprise import SVDpp
+from surprise import SVDppimp
 from surprise import Dataset
 from surprise import accuracy
 from surprise.model_selection import train_test_split
@@ -16,61 +17,28 @@ from joblib import Parallel
 from joblib import delayed
 import multiprocessing
 import time
-import surprise.dump
+from surprise.dump import dump
 import pandas as pd
 from os.path import join
 from surprise.builtin_datasets import get_dataset_dir
 
 # Load the movielens-100k dataset (download it if needed),
-# data = Dataset.load_builtin('jester')
-dataset_name ='ml-100k'
+# dataset_name ='ml-100k'
 # dataset_name ='ml-1m'
-# dataset_name ='ml-latest-small'
+dataset_name ='ml-latest-small'
 # dataset_name ='jester'
 data = Dataset.load_builtin(dataset_name)
-# data = Dataset.load_builtin('ml-latest-small')
-# data = Dataset.load_builtin('ml-1m')
 myalgo = True
 n_factors = 20
-n_epochs =  60
+n_epochs =  20
 i_imp_factors = False
 pminusq = True
 ptimesq = not pminusq
+beta = 0.2
 # sample random trainset and testset
 # test set is made of 20% of the ratings.
 trainset, testset = train_test_split(data,random_state=100, test_size=.20)
 
-def load_dataset_for_stats(dataset_name='ml-100k'):
-	if dataset_name == 'ml-100k':
-		# file_path = os.path.expanduser('~/.surprise_data/ml-100k/ml-100k/u.data')
-		path=join(get_dataset_dir(), 'ml-100k/ml-100k/u.data')
-		ratings_df = pd.read_csv(path, sep='\t', names=['user_id', 'item_id', 'rating', 'timestamp'])
-	elif dataset_name == 'ml-1m':
-		path =join(get_dataset_dir(), 'ml-1m/ml-1m/ratings.dat')
-		# file_path = os.path.expanduser('~/.surprise_data/ml-100k/ml-100k/u.data')
-		ratings_df = pd.read_table(path, sep='::', names=['user_id', 'item_id', 'rating', 'timestamp'])
-	elif dataset_name == 'ml-latest-small':
-		path=join(get_dataset_dir(), 'ml-latest-small/ratings.csv')
-		ratings_df = pd.read_table(path, sep=',', names=['user_id', 'item_id', 'rating', 'timestamp'])
-	elif dataset_name == 'jester':
-		path=join(get_dataset_dir(), 'jester/jester_ratings.dat')
-		ratings_df = pd.read_table(path, sep='\t\t', names=['user_id', 'item_id', 'rating'])
-	else:
-		print('No dataset name given')
-	return ratings_df
-
-def graph_user_average_ratings_ply(dataset_name):
-	ratingdf = load_dataset_for_stats(dataset_name)
-	table = FF.create_table(ratingdf)
-	py.plot(table, filename='rating-data-sample')
-	# print(ratingdf.head(100))
-# graph_user_average_ratings_ply(dataset_name)
-
-def graph_user_average_ratings_matplot(dataset_name):
-	ratingdf = load_dataset_for_stats(dataset_name)
-	# plt.hist(ratingdf[0:1000], bins=np.arange(ratingdf[0:10].rating.min(), ratingdf[0:10].rating.max()+1))
-	plt.hist(ratingdf[0:100], bins=len(ratingdf[0:100].user_id))
-	plt.show()
 # graph_user_average_ratings_matplot(dataset_name)
 #loggin param details
 print(dataset_name)
@@ -79,11 +47,12 @@ print('n_factors =' +str(n_factors))
 print('n_epochs =' +str(n_epochs))
 print('i_imp_factors =' +str(i_imp_factors))
 # print('first_potion = 1*item_pop')
+print('beta =' +str(beta))
+print('pminusq =' +str(pminusq))
 
 
 # We'll use the SVD ++ algorithm.
 algo = SVDpp(n_factors= n_factors, i_imp_factors=i_imp_factors, random_state=100)
-print('i_imp_factors =' +str(i_imp_factors))
 start = time.time()
 if myalgo:
 	trainset2 = cp.deepcopy(trainset)
@@ -93,107 +62,43 @@ if myalgo:
 	raw2inner_id_items = {}
 	ur = defaultdict(list)
 	ir = defaultdict(list)
-	# print('trainset2.ur')
-	# print(trainset2.ur)
-	# print('trainset2.ir')
-	# print(trainset2.ir)
 	print('trainset2.n_ratings = '+ str(trainset2.n_ratings))
-	# ircount = {}
-	# n_jobs = multiprocessing.cpu_count()
-	# print('n_jobs ='+str(n_jobs))
+	print('trainset2.n_items = '+ str(trainset2.n_items))
+	print('trainset2.n_users = '+ str(trainset2.n_users))
+	print('user:item = '+ str(trainset2.n_users/trainset2.n_items))
+	# beta = trainset2.n_users/trainset2.n_items 
+	# if dataset_name == 'jester':
+		# beta = trainset2.n_items/trainset2.n_users
+	print('beta =' +str(beta))
 
 	for item_x in range(trainset2.n_items):
 		item_list = []
 		item_pop = len(trainset2.ir[item_x])/trainset2.n_items
+		# item_pop = item_pop * beta
+		# print('item_pop')
+		# print(item_pop)
 		for user, rating in trainset2.ir[item_x]:
 			u_pop = 1/len(trainset2.ur[user])
 			# print(item)
 			# print(rating)
 			item_list.append((user,u_pop * item_pop))
 		ir[item_x] = item_list
-
-	# assert ir == trainset2.ir
 	trainset2.ir = ir
 
 	for user_x in range(trainset2.n_users):
 		user_list = []
+		#using 1 heare simply binarizes, meaning r=1
 		u_pop = 1/len(trainset2.ur[user_x])
 		for item, rating in trainset2.ur[user_x]:
 			item_pop = len(trainset2.ir[item])/trainset2.n_items
+			# item_pop = item_pop * beta
 			# print(item)
 			# print(rating)
 			user_list.append((item,1))
 		ur[user_x] = user_list
 
-	# assert ur == trainset2.ur
 	trainset2.ur = ur
 
-	# for user_x in range(trainset2.n_users):
-	# 	item_len = len(trainset2.ur[x])
-	# 	item_pop = item_len/trainset2.n_items
-	# 	for uu,rr in trainset2.ir[x]:
-	# 		num_items_rated_by_user = len(trainset2.ur[uu])
-	# 		first_potion = 1/num_items_rated_by_user
-	# 		# ir[x].append((uu, 1-(first_potion* u_pop)))
-	# 		ir[x].append((uu, (first_potion* item_pop)))
-
-
-	# def set_ur(ii,rr,trainset, num_items_rated_by_user):
-	# 	item_len = len(trainset2.ir[ii])
-	# 	item_pop = item_len/trainset2.n_items
-	# 	# first_potion = 1/num_items_rated_by_user
-	# 	first_potion = 1
-	# 	return (ii, (first_potion*item_pop))
-
-	# def get_ur(x,ur, trainset,n_jobs):
-	# 	num_items_rated_by_user = len(trainset2.ur[x])
-	# 	delayed_list = (delayed(set_ur)(ii, rr, trainset2, n_jobs)
-	#                         for ii, rr in trainset2.ur[x])
-	# 	out = Parallel(n_jobs=n_jobs, pre_dispatch='2*n_jobs')(delayed_list)
-	# 	ur[x].append(out)
-
-	# delayed_list = (delayed(get_ur)(x, ur, trainset2,n_jobs)
-	#                         for (x) in range(trainset2.n_users))
-	# Parallel(n_jobs=n_jobs, pre_dispatch='2*n_jobs')(delayed_list)
-	# print('ur')
-	# print(ur)
-
-
-	# for x in range(trainset2.n_items):
-	# 	# num_users_rated_the_item = len(trainset.ur[x])
-	# 	item_len = len(trainset2.ur[x])
-	# 	item_pop = item_len/trainset2.n_items
-	# 	for uu,rr in trainset2.ir[x]:
-	# 		num_items_rated_by_user = len(trainset2.ur[uu])
-	# 		first_potion = 1/num_items_rated_by_user
-	# 		# ir[x].append((uu, 1-(first_potion* u_pop)))
-	# 		ir[x].append((uu, (first_potion* item_pop)))
-
-	# for u,i,r in trainset2.all_ratings():
-	# 	raw2inner_id_users[trainset2.to_raw_uid(u)] = u
-	# 	raw2inner_id_items[trainset2.to_raw_iid(i)] = i
-
-	# t = Trainset(ur,
-	# 		ir,
-	# 		# trainset2.n_users,
-	# 		943,
-	# 		# trainset2.n_items,
-	# 		1656,
-	# 		trainset2.n_ratings,
-	# 		trainset2.rating_scale,
-	# 		trainset2.offset,
-	# 		raw2inner_id_users,
-	# 		raw2inner_id_items)
-	# assert trainset.n_users == t.n_users
-	# assert trainset.n_items == t.n_items
-	# assert trainset.ur == t.ur
-
-# for uu,ii,rr in t.all_ratings():
-# 	print(" ratings {}, {}, {}".format(uu,ii,rr))
-
-# print(t.n_users)
-# print(t.n_items)
-# print(t.n_ratings)
 	algo2.fit(trainset2)
 	print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>algo2.fit(trainset2)<<<<<<<before')
 	print('algo2.pu')
@@ -212,8 +117,9 @@ if myalgo:
 	print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>algo.pu - algo2.pu<<<<<after<<<<<<')
 	if pminusq:
 		# print('algo.pu - algo2.pu')
-		algo.pu = algo.pu - algo2.pu
-		algo.qi = algo.qi - algo2.qi
+		print('(1-beta ) * algo.pu - beta * algo2.pu')
+		algo.pu =  (1-beta ) * algo.pu - beta * algo2.pu
+		algo.qi =  (1-beta ) * algo.qi - beta * algo2.qi
 	if ptimesq:
 		print('algo.pu * algo2.pu')
 		algo.pu = algo.pu * algo2.pu
@@ -235,23 +141,19 @@ print('myalgo =' +str(myalgo))
 print('n_factors =' +str(n_factors))
 print('n_epochs =' +str(n_epochs))
 if pminusq:
-	print('algo.pu - algo2.pu')
+	# print('algo.pu - algo2.pu')
+	print('(1-beta ) * algo.pu - beta * algo2.pu')
 if ptimesq:
 	print('algo.pu * algo2.pu')
 # Then compute RMSE
+print('beta =' +str(beta))
 accuracy.rmse(predictions)
 accuracy.mae(predictions)
 accuracy.fcp(predictions)
 
 print('time.time() - start')
 print(time.time() - start)
-'''
-# plt.bar(ircount{:},100)
 
 
-# plt.hist(list())
-# plt.hist(list(ircount.values()))
-# plt.show()
-'''
-# dump('myalgosvd', predictions=predictions, algo=algo, verbose=1)
+dump('results/myalgosvd'+dataset_name+'_n_factors_'+str(n_factors)+'_n_epochs_'+str(n_epochs)+'_beta_'+str(beta)+'_myalgo_'+str(myalgo)+'_pminusq_'+str(pminusq)+'_ptimesq_'+str(ptimesq), predictions=predictions, algo=algo, verbose=1)
 # load()
