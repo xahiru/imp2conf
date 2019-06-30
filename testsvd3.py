@@ -25,10 +25,10 @@ from surprise.builtin_datasets import get_dataset_dir
 from surprise.model_selection import KFold
 
 # Load the movielens-100k dataset (download it if needed),
-# dataset_name ='ml-100k'
+dataset_name ='ml-100k'
 # dataset_name ='ml-1m'
 # dataset_name ='ml-latest-small'
-dataset_name ='jester'
+# dataset_name ='jester'
 data = Dataset.load_builtin(dataset_name)
 myalgo = True
 n_factors = 20
