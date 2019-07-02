@@ -37,6 +37,7 @@ i_imp_factors = False
 pminusq = False
 ptimesq = not pminusq
 beta = 0.15
+binary = False
 # sample random trainset and testset
 # test set is made of 20% of the ratings.
 # trainset, testset = train_test_split(data,random_state=100, test_size=.20)
@@ -66,12 +67,12 @@ kf = KFold(n_splits=5,  random_state=100)
 for trainset, testset in kf.split(data):
 	# We'll use the SVD ++ algorithm.
 	# algo = SVDpp(n_factors= n_factors, i_imp_factors=i_imp_factors, random_state=100)
-	algo = SVDppimp(n_factors= n_factors, i_imp_factors=i_imp_factors, binary=True, random_state=100)
+	algo = SVDppimp(n_factors= n_factors, i_imp_factors=i_imp_factors, binary=binary, random_state=100)
 	trainset3 = cp.deepcopy(trainset)
 	testset3 = cp.deepcopy(testset)
 	algo.fit(trainset3)
 	algo_original = cp.deepcopy(algo)
-	algo_original = SVDppimp(n_factors= n_factors, i_imp_factors=i_imp_factors, binary=True, random_state=100)
+	algo_original = SVDppimp(n_factors= n_factors, i_imp_factors=i_imp_factors, binary=binary, random_state=100)
 	algo_original.fit(trainset3)
 	testset_orginal = cp.deepcopy(testset3)
 	start = time.time()
@@ -159,18 +160,17 @@ for trainset, testset in kf.split(data):
 		print('algo.pu * algo2.pu')
 	# Then compute RMSE
 	print('beta =' +str(beta))
-	sum_rmse += accuracy.rmse(predictions)
-	sum_mae += accuracy.mae(predictions)
+	sum_rmse += accuracy.rmse(predictions, binary=binary)
+	sum_mae += accuracy.mae(predictions, binary=binary)
 	sum_fcp += accuracy.fcp(predictions)
 
 	print('====SVDpp== results')
 	p2 = algo_original.test(testset_orginal)
 	print('>>>>>>>predictions p2<<<<<<<<<<<<<<<<<<<<<')
 	for p in p2[:10]:
-		# print(t.ur[t.to_inner_uid(p.uid)])
 		print(p)
-	sum_rmse_svd += accuracy.rmse(p2)
-	sum_mae_svd += accuracy.mae(p2)
+	sum_rmse_svd += accuracy.rmse(p2, binary=binary)
+	sum_mae_svd += accuracy.mae(p2, binary=binary)
 	sum_fcp_svd += accuracy.fcp(p2)
 
 	print('time.time() - start')
