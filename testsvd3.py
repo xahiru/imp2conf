@@ -1,7 +1,7 @@
 from surprise import NMF
 from surprise import SVD
 from surprise import SVDpp
-# from surprise import SVDppimp
+from surprise import SVDppimp
 from surprise import AlgoBase
 from surprise import Dataset
 from surprise import accuracy
@@ -34,7 +34,7 @@ myalgo = True
 n_factors = 20
 n_epochs =  20
 i_imp_factors = False
-pminusq = True
+pminusq = False
 ptimesq = not pminusq
 beta = 0.15
 # sample random trainset and testset
@@ -65,16 +65,19 @@ sum_fcp_svd = 0
 kf = KFold(n_splits=5,  random_state=100)
 for trainset, testset in kf.split(data):
 	# We'll use the SVD ++ algorithm.
-	algo = SVDpp(n_factors= n_factors, i_imp_factors=i_imp_factors, random_state=100)
+	# algo = SVDpp(n_factors= n_factors, i_imp_factors=i_imp_factors, random_state=100)
+	algo = SVDppimp(n_factors= n_factors, i_imp_factors=i_imp_factors, binary=True, random_state=100)
 	trainset3 = cp.deepcopy(trainset)
 	testset3 = cp.deepcopy(testset)
 	algo.fit(trainset3)
 	algo_original = cp.deepcopy(algo)
+	algo_original = SVDppimp(n_factors= n_factors, i_imp_factors=i_imp_factors, binary=True, random_state=100)
+	algo_original.fit(trainset3)
 	testset_orginal = cp.deepcopy(testset3)
 	start = time.time()
 	if myalgo:
 		trainset2 = cp.deepcopy(trainset)
-		algo2 = SVDpp(n_factors= n_factors, n_epochs=n_epochs,random_state=100)
+		algo2 = SVDppimp(n_factors= n_factors, n_epochs=n_epochs,random_state=100)
 
 		raw2inner_id_users = {}
 		raw2inner_id_items = {}
@@ -119,20 +122,7 @@ for trainset, testset in kf.split(data):
 		trainset2.ur = ur
 
 		algo2.fit(trainset2)
-		# print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>algo2.fit(trainset2)<<<<<<<before')
-		# print('algo2.pu')
-		# print(algo2.pu)
-		# print('algo2.qi')
-		# print(algo2.qi)
 
-		
-		algo_original = cp.deepcopy(algo)
-		testset_orginal = cp.deepcopy(testset)
-		# print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>algo.fit(trainset)<<<<<<<before')
-		# print('algo.pu')
-		# print(algo.pu)
-		# print('algo.qi')
-		# print(algo.qi)
 
 	if myalgo:
 		# print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>algo.pu - algo2.pu<<<<<after<<<<<<')
@@ -147,18 +137,15 @@ for trainset, testset in kf.split(data):
 			print('algo.pu * algo2.pu')
 			algo.pu = algo.pu * algo2.pu
 			algo.qi = algo.qi * algo2.qi
-		# print('algo.pu')
-		# print(algo.pu)
-		# print('algo.qi')
-		# print(algo.qi)
-		# print('>>>>>>>end after<<<<<<<<<<<<<<<<<<<<<')
+
 		print('>>>>>>>results<<<<<<<<<<<<<<<<<<<<<')
 
 	predictions = algo.test(testset)
 
-		# for p in predictions:
-		# 	# print(t.ur[t.to_inner_uid(p.uid)])
-		# 	print(p)
+	print('>>>>>>>predictions<<<<<<<<<<<<<<<<<<<<<')
+	for p in predictions[:10]:
+		# print(t.ur[t.to_inner_uid(p.uid)])
+		print(p)
 
 	print(dataset_name)
 	print('myalgo =' +str(myalgo))
@@ -177,9 +164,14 @@ for trainset, testset in kf.split(data):
 	sum_fcp += accuracy.fcp(predictions)
 
 	print('====SVDpp== results')
-	sum_rmse_svd += accuracy.rmse(algo_original.test(testset_orginal))
-	sum_mae_svd += accuracy.mae(algo_original.test(testset_orginal))
-	sum_fcp_svd += accuracy.fcp(algo_original.test(testset_orginal))
+	p2 = algo_original.test(testset_orginal)
+	print('>>>>>>>predictions p2<<<<<<<<<<<<<<<<<<<<<')
+	for p in p2[:10]:
+		# print(t.ur[t.to_inner_uid(p.uid)])
+		print(p)
+	sum_rmse_svd += accuracy.rmse(p2)
+	sum_mae_svd += accuracy.mae(p2)
+	sum_fcp_svd += accuracy.fcp(p2)
 
 	print('time.time() - start')
 	print(time.time() - start)
@@ -194,7 +186,7 @@ print(str(sum_mae/kt))
 print('sum_fcp')
 print(str(sum_fcp/kt))
 
-print('====final averages results  SVDpp==')
+print('====final averages results   SVDpp==')
 print('RMSE')
 print(str(sum_rmse_svd/kt))
 print('mae')
