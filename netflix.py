@@ -28,7 +28,7 @@ def chooserandomnfiles(path, list_size=10, random_state=100, verbose=True):
 		filename = path+filename
 		if verbose:
 			print(filename)
-		df = pd.read_csv(filename, names=['itemID', 'userID', 'rating', 'timestamp'], header=0)
+		df = pd.read_csv(filename, sep='\t', names=['itemID', 'userID', 'rating', 'timestamp'], header=0)
 		li.append(df)
 	return pd.concat(li, axis=0, ignore_index=True, sort=True)
     # return 0

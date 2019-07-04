@@ -38,8 +38,8 @@ def graph_user_average_ratings_ply(dataset_name):
 
 def graph_user_average_ratings_matplot(dataset_name):
 	ratingdf = load_dataset_for_stats(dataset_name)
-	# plt.hist(ratingdf[0:1000], bins=np.arange(ratingdf[0:10].rating.min(), ratingdf[0:10].rating.max()+1))
-	plt.hist(ratingdf[0:100], bins=len(ratingdf[0:100].user_id))
+	plt.hist(ratingdf[0:1000], bins=np.arange(ratingdf[0:10].rating.min(), ratingdf[0:10].rating.max()+1))
+	# plt.hist(ratingdf[0:100], bins=len(ratingdf[0:100].user_id))
 	plt.show()
 
 

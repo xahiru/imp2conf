@@ -89,21 +89,27 @@ class ImpliciTrust(AlgoBase):
     		return self.final_algo.estimate(u,i)
 
 dataset_name ='ml-100k'
+# dataset_name ='jester'
 compare = 3
 n_factors = 20
 n_epochs = 20
+save = True
 data = Dataset.load_builtin(dataset_name)
 trainset, testset = train_test_split(data,random_state=100, test_size=.20)
+algo_name = 'SVDpp_'
 algo = SVDpp(random_state=100)
 final_algo = SVDpp(random_state=100)
 myalgo = ImpliciTrust(trainset, testset, algo, final_algo, compare=compare)
 myalgo.fit(trainset)
-# myalgo.single_user_trustlist('dd')
-predi = myalgo.test(testset)
-for p in predictions[:10]:
+print(dataset_name)
+# myalgo.single_user_trustlist(543)
+# myalgo.single_item_trustlist(249)
+
+predictions = myalgo.test(testset)
+for p in predictions[:100]:
 		# print(t.ur[t.to_inner_uid(p.uid)])
 		print(p)
-accuracy.rmse(predi)
-
-dump('results/'+dataset_name+'_n_factors_'+str(n_factors)+'_n_epochs_'+str(n_epochs)+'compare'+str(beta), predictions=predictions, algo=algo, verbose=1)
+accuracy.rmse(predictions)
+if save:
+	dump('results/'+algo_name+dataset_name+'_n_factors_'+str(n_factors)+'_n_epochs_'+str(n_epochs)+'compare'+str(compare), predictions=predictions, algo=myalgo, verbose=1)
 
