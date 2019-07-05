@@ -10,6 +10,10 @@ from os.path import join
 from surprise.builtin_datasets import get_dataset_dir
 import pandas as pd
 
+from surprise import Dataset
+from surprise.model_selection import train_test_split
+from surprise import Reader
+
 
 dataset_name ='ml-100k'
 
@@ -129,9 +133,30 @@ def graph_by_py(dataset_name,itype='user_id'):
 	print(str(np.sum(ry)/len(ry)))
 	py.plot(data, filename='basic-bar')
 	pass
+
+def list_ir(dataset_name, itype='user_id'):
+	ratingdf = load_dataset_for_stats(dataset_name)
+
+	# A reader is still needed but only the rating_scale param is requiered.
+	reader = Reader(rating_scale=(1, 5))
+
+	# The columns must correspond to user id, item id and ratings (in that order).
+	data = Dataset.load_from_df(ratingdf[['user_id', 'item_id', 'rating']], reader)
+	trainset, testset = train_test_split(data,random_state=100, test_size=.20)
+	if itype == 'user_id':
+		rx = trainset.ur
+		for k, v in rx.items():
+			print(k)
+			print(v)
+		
+	elif itype == 'item_id':
+		rx = trainset.ir
+
+
 # graph_user_average_ratings_matplot(dataset_name)
 # graph_by(dataset_name)
 # graph_plt(dataset_name)
 # graph_distr_pl(dataset_name)
 # graph_bar(dataset_name)
-graph_by_py(dataset_name)
+# graph_by_py(dataset_name)
+list_ir(dataset_name, itype='user_id')
