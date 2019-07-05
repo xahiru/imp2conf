@@ -9,6 +9,7 @@ from collections import defaultdict
 import copy as cp
 from surprise.dump import dump
 import pandas as pd
+import numpy as np
 
 
 class ImpliciTrust(AlgoBase):
@@ -30,17 +31,30 @@ class ImpliciTrust(AlgoBase):
         self.random_state = random_state
         self.pu = []
         self.qu = []
+        self.t_all_rating = []
         self.compare = compare if compare is not None else 0
  
     def fit(self, trainset):
+        print('new trust')
+        self.get_all_rating_trust(self.trainset)
         print('fitting')
         self.final_algo.fit(self.final_algo_trainset)
+        print('self.trainset.ur[543]')
+        print(self.trainset.ur[543])
+        print('self.trainset.ir[606]')
+        print(self.trainset.ir[249])
         print('copying')
         self.orginal_pu = cp.deepcopy(self.final_algo.pu)
         self.orginal_qi = cp.deepcopy(self.final_algo.qi)
         print('setting ur n ir')
         self.set_ur(trainset, self.binary)
         self.set_ir(trainset, self.binary)
+        print('self.trainset.ur[543]')
+        print('inner id of .ur[543]')
+        print(trainset.to_raw_uid(543))
+        print(self.trainset.ur[543])
+        for x,_ in trainset.ur[543]:
+            print(trainset.to_raw_iid(x))
         print('final fit')
         self.algo.fit(self.trainset)
         self.pu = self.algo.pu
@@ -50,10 +64,10 @@ class ImpliciTrust(AlgoBase):
     def set_ur(self, trainset, binary=True):
         ir = defaultdict(list)
         if binary:
-            for item_x in range(trainset.n_items):
+            for item_x, x_ir_list in trainset.ir.items():
                 item_list = []
-                item_pop = len(trainset.ir[item_x])/trainset.n_items
-                for user, rating in trainset.ir[item_x]:
+                item_pop = len(x_ir_list)/trainset.n_items
+                for user, rating in x_ir_list:
                     u_pop = 1/len(trainset.ur[user])
                     item_list.append((user,u_pop * item_pop))
                     # print((user,u_pop * item_pop))
@@ -72,10 +86,10 @@ class ImpliciTrust(AlgoBase):
     def set_ir(self, trainset, binary=True):
         ur = defaultdict(list)
         if binary:
-            for user_x in range(trainset.n_users):
+            for user_x, x_ur_list in trainset.ur.items():
                 user_list = []
-                user_pop = 1/len(trainset.ur[user_x])
-                for item, rating in trainset.ur[user_x]:
+                user_pop = 1/len(x_ur_list)
+                for item, rating in x_ur_list:
                     item_pop = len(trainset.ir[item])/trainset.n_items
                     user_list.append((item, item_pop * user_pop))
                     # print((item, item_pop * user_pop))
@@ -95,14 +109,40 @@ class ImpliciTrust(AlgoBase):
             self.trainset.ur = ur
             print('done set_ir')
 
+    def get_all_rating_trust(self, trainset, binary=True):
+        df = pd.DataFrame(trainset.all_ratings(), columns=['user_id', 'item_id', 'rating'])
+        print(df.head())
+        # rx = df.user_id.unique().tolist()
+        # ry = df.user_id.value_counts()
+        # print('ry')
+        # print(ry)
+        # print('>>>>>>rx')
+        # print(rx)
+        # u_mean = np.sum(ry)/len(ry)
+        # df['u_mean'] = u_mean
+        
+        # df['u_pop'] = ry[df.user_id]
+        df['u_count'] = df['user_id'].map(df['user_id'].value_counts())
+        df['i_count'] = df['item_id'].map(df['item_id'].value_counts())
+        df['u_pop'] = 1/df.u_count
+        df['nbu_pop'] = df.rating/df.u_count
+        df['item_pop'] = df.i_count/trainset.n_items
+        df['bitem_pop'] = 1/trainset.n_items
+        df['nbitem_pop'] = 1/df.i_count
+        df['nbitem_popc'] = df.rating/df.i_count
+        df['trust'] = df.u_pop * df.item_pop
+        print(df)
+        self.t_all_rating_df = df
+
+
     def single_user_trustlist(self, u, i):
         print('retreving u trust')
         print(str(u))
         print(str(i))
         for it,t in self.trainset.ur[u]:
-            print('it')
-            print(str(it))
-            print(str(t))
+            # print('it')
+            # print(str(it))
+            # print(str(t))
             if it==i:
                 return t
         return 0
@@ -138,9 +178,9 @@ save = False
 binary=True
 data = Dataset.load_builtin(dataset_name)
 trainset, testset = train_test_split(data,random_state=100, test_size=.20)
-algo_name = 'SVDpp_'
-algo = SVDpp(random_state=100)
-final_algo = SVDpp(random_state=100)
+algo_name = 'SVD_'
+algo = SVD(random_state=100)
+final_algo = SVD(random_state=100)
 print('start')
 myalgo = ImpliciTrust(trainset, testset, algo, final_algo, compare=compare, binary=binary)
 myalgo.fit(trainset)
@@ -160,7 +200,7 @@ predictions = myalgo.test(testset)
 for p in predictions[:10]:
 	# print(p)
     print(p)
-    if int(p[0])== 543:
+    if int(p[0])== '543':
         print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>543 found')
         print('543 found')
     print(myalgo.single_user_trustlist(int(p[0]), int(p[1])))
@@ -182,8 +222,8 @@ def get_Ui(iid):
         return len(trainset.ir[trainset.to_inner_iid(iid)])
     except ValueError:  # item was not part of the trainset
         return 0 
-df['Iu'] = df.user_id.apply(get_Iu)
-df['Ui'] = df.item_id.apply(get_Ui)
+df['Ui'] = df.user_id.apply(get_Iu)
+df['Iu'] = df.item_id.apply(get_Ui)
 df['ERROR IN PREDICTION'] = abs(df.estimated_Ratings - df.ratings_ui)
 
 print(df.head())
@@ -197,6 +237,7 @@ print(dataset_name)
 print('compare ='+str(compare))
 print('binary')
 print(str(binary))
+print(df.loc[df['user_id'] == '812'])
 
 if save:
 	dump('results/'+algo_name+dataset_name+'_n_factors_'+str(n_factors)+'_n_epochs_'+str(n_epochs)+'compare'+str(compare), predictions=predictions, algo=myalgo, verbose=1)
