@@ -23,6 +23,7 @@ class ImpliciTrust(AlgoBase):
         self.final_algo = final_algo
         self.final_algo_testset = cp.deepcopy(testset)
         self.final_algo_trainset = cp.deepcopy(trainset)
+        self.trainset2 = cp.deepcopy(trainset)
         self.orginal_pu = []
         self.orginal_qi = []
         self.algo = algo
@@ -31,18 +32,24 @@ class ImpliciTrust(AlgoBase):
         self.random_state = random_state
         self.pu = []
         self.qu = []
-        self.t_all_rating = []
+        # self.t_all_rating =  pd.DataFrame(trainset.all_ratings(), columns=['user_id', 'item_id', 'rating'])
         self.compare = compare if compare is not None else 0
  
     def fit(self, trainset):
         print('new trust')
-        self.get_all_rating_trust(self.trainset)
+        self.t_all_rating = self.get_all_rating_trust(self.trainset2)
+        self.set_ur_new(self.trainset2, self.t_all_rating)
+        self.set_ir_new(self.trainset2, self.t_all_rating)
         print('fitting')
         self.final_algo.fit(self.final_algo_trainset)
         print('self.trainset.ur[543]')
         print(self.trainset.ur[543])
+        print('self.trainset2.ur[543]')
+        print(self.trainset2.ur[543])
         print('self.trainset.ir[606]')
-        print(self.trainset.ir[249])
+        print(self.trainset.ir[606])
+        print('self.trainset2.ir[606]')
+        print(self.trainset2.ir[606])
         print('copying')
         self.orginal_pu = cp.deepcopy(self.final_algo.pu)
         self.orginal_qi = cp.deepcopy(self.final_algo.qi)
@@ -124,15 +131,52 @@ class ImpliciTrust(AlgoBase):
         # df['u_pop'] = ry[df.user_id]
         df['u_count'] = df['user_id'].map(df['user_id'].value_counts())
         df['i_count'] = df['item_id'].map(df['item_id'].value_counts())
-        df['u_pop'] = 1/df.u_count
-        df['nbu_pop'] = df.rating/df.u_count
+        
+        if binary:
+            df['u_pop'] = 1/df.u_count
+            # df['bitem_pop'] = 1/trainset.n_items
+            # df['item_pop_count'] = 1/df.i_count
+        else:
+            df['nbu_pop'] = df.rating/df.u_count
+            # df['nbitem_popc'] = df.rating/df.i_count
+        
         df['item_pop'] = df.i_count/trainset.n_items
-        df['bitem_pop'] = 1/trainset.n_items
-        df['nbitem_pop'] = 1/df.i_count
-        df['nbitem_popc'] = df.rating/df.i_count
         df['trust'] = df.u_pop * df.item_pop
         print(df)
-        self.t_all_rating_df = df
+        return df
+        print('done get_all_rating_trust')
+
+    def set_ur_new(self, trainset, df_orgi):
+        ur = defaultdict(list)
+        for user_x, x_ur_list in trainset.ur.items():
+            user_list = []
+            # print(df_orgi.head())
+            
+            df = cp.deepcopy(df_orgi)
+            # print(str(trainset.to_raw_uid(user_x)))
+            df = df.loc[df['user_id'] == user_x]
+            # print(df.head())
+            for item, rating in x_ur_list:
+                # print(str(user_x))
+                # print(str(item))
+                # print(str(df.loc[df['item_id'] == item].trust.values[0]))
+                user_list.append((item, df.loc[df['item_id'] == item].trust.iat[0]))
+            ur[user_x] = user_list
+        self.trainset2.ur = ur
+        print('done set_ur_new')
+
+    def set_ir_new(self, trainset, df_orgi):
+        ir = defaultdict(list)
+        for item_x, x_ir_list in trainset.ir.items():
+            user_list = []
+            df = cp.deepcopy(df_orgi)
+            df = df.loc[df['item_id'] == item_x]
+            for user, rating in x_ir_list:
+                user_list.append((user, df.loc[df['user_id'] == user].trust.iat[0]))
+            ur[item_x] = user_list
+        self.trainset2.ir = ir
+        print('done set_ir_new')
+
 
 
     def single_user_trustlist(self, u, i):
