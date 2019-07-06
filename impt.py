@@ -173,7 +173,7 @@ class ImpliciTrust(AlgoBase):
             df = df.loc[df['item_id'] == item_x]
             for user, rating in x_ir_list:
                 user_list.append((user, df.loc[df['user_id'] == user].trust.iat[0]))
-            ur[item_x] = user_list
+            ir[item_x] = user_list
         self.trainset2.ir = ir
         print('done set_ir_new')
 
