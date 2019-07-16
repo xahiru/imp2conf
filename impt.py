@@ -11,6 +11,8 @@ from surprise.dump import dump
 import pandas as pd
 import numpy as np
 
+import plotly.plotly as py
+
 
 class ImpliciTrust(AlgoBase):
 
@@ -36,21 +38,22 @@ class ImpliciTrust(AlgoBase):
         self.compare = compare if compare is not None else 0
  
     def fit(self, trainset):
-        print('new trust')
-        self.t_all_rating = self.get_all_rating_trust(self.trainset2)
         print('fitting')
         self.final_algo.fit(self.final_algo_trainset)
-        print('copying')
-        self.orginal_pu = cp.deepcopy(self.final_algo.pu)
-        self.orginal_qi = cp.deepcopy(self.final_algo.qi)
-        print('setting ur n ir')
-        self.set_ur_new(self.trainset, self.t_all_rating)
-        self.set_ir_new(self.trainset, self.t_all_rating)
-        print('final fit')
-        self.algo.fit(self.trainset)
-        self.pu = cp.deepcopy(self.algo.pu)
-        self.qi = cp.deepcopy(self.algo.qi)
-        print('done fitting with modified trainset')
+        if compare != 4:
+            print('copying')
+            self.orginal_pu = cp.deepcopy(self.final_algo.pu)
+            self.orginal_qi = cp.deepcopy(self.final_algo.qi)
+            print('new trust')
+            self.t_all_rating = self.get_all_rating_trust(self.trainset2)
+            print('setting ur n ir')
+            self.set_ur_new(self.trainset, self.t_all_rating)
+            self.set_ir_new(self.trainset, self.t_all_rating)
+            print('final fit')
+            self.algo.fit(self.trainset)
+            self.pu = cp.deepcopy(self.algo.pu)
+            self.qi = cp.deepcopy(self.algo.qi)
+            print('done fitting with modified trainset')
 
     def set_ur(self, trainset, binary=True):
         ir = defaultdict(list)
@@ -114,7 +117,8 @@ class ImpliciTrust(AlgoBase):
             # df['nbitem_popc'] = df.rating/df.i_count
         
         df['item_pop'] = df.i_count/trainset.n_items
-        df['trust'] = df.u_pop * df.item_pop
+        # df['trust'] = df.u_pop *  (1 - df.item_pop)
+        df['trust'] = 1
         # print(df)
         return df
         
@@ -147,8 +151,8 @@ class ImpliciTrust(AlgoBase):
         #only shows if it exist in the main
         df = cp.deepcopy(self.t_all_rating)
         try:
-            df = df.loc[df['item_id'] == trainset.to_inner_uid(u)]
-            val = df.loc[df['user_id'] == trainset.to_inner_iid(i)].trust
+            df = df[df['item_id'] == self.trainset.to_inner_uid(u)]
+            val = df[df['user_id'] == self.trainset.to_inner_iid(i)].trust
             # print(str(val))
             if not val.empty:
                 return val.item()
@@ -172,31 +176,51 @@ class ImpliciTrust(AlgoBase):
 
     def any_pair_trust(self, u, i, binary=True):
         df = cp.deepcopy(self.t_all_rating)
+        df2 = cp.deepcopy(self.t_all_rating)
+        i_count = 0
+        u_count = 0
         try:
             u_count_df = df[df['user_id'] == self.trainset.to_inner_uid(u)]
-            u_count = len(u_count_df.index)
+            # if self.trainset.to_inner_uid(u) == 298:
+            #     print(u_count_df)
+            #     print(u_count_df.u_count.values[0])
+            u_count = u_count_df.u_count.values[0]
             # print(u_count)
-            i_count_df = df[df['item_id'] == self.trainset.to_inner_iid(i)]
+            i_count_df = df2[df2['item_id'] == self.trainset.to_inner_iid(i)]
+            # if self.trainset.to_inner_iid(i) == 132:
+            #     print(i_count_df)
+            #     print(i_count_df.i_count.values[0])
             # print(i_count_df)
-            i_count = len(i_count_df.index)
+            i_count = i_count_df.i_count.values[0]
             # print(i_count)
             if binary:
                 u_pop = 1/u_count
             item_pop = i_count/self.trainset.n_items
-            trust = item_pop * u_pop
+            trust = item_pop * (1 - u_pop)
+            # print('u_count '+str(u_count) + 'i_count '+str(i_count)+ 'trust ' + str(trust))
             return u_count, i_count, trust
+            # return u_count, i_count, 1
         except ValueError:
             return 0, 0, 0
 
     def single_item_geti_count(self, i):
     	return self.trainset.ir[i]
 
-    def single_item_trust_ir(self, u, i):
+    def single_item_trust_ir_ur(self, u, i):
+        found = False
         try:
-            for u,rating in trainset.ir[self.trainset.to_inner_iid(i)]:
-                if u == self.trainset.to_inner_iid(u):
+            for ui,rating in self.trainset.ir[i]:
+                print(str(rating))
+                print(str(ui))
+                print(str(u))
+                # print(str(self.trainset.to_inner_iid(u)))
+                if ui == u:
+                    # print('match')
+                    found = True
                     return rating
-        except ValueError
+            if not found:
+                return 0
+        except ValueError:
             return 0
     def single_item_geti_count(self, i):
         return self.trainset.ir[i]
@@ -216,10 +240,17 @@ class ImpliciTrust(AlgoBase):
             self.final_algo.qi = self.orginal_qi - self.qi
             return self.final_algo.estimate(u,i)
         if self.compare == 4:
-            #trust is also used in estimation
-            self.final_algo.pu = self.orginal_pu
-            self.final_algo.qi = self.orginal_qi
+            #baseline
             return self.final_algo.estimate(u,i)
+
+def graph_by_py(ratingdf):
+    rx = ratingdf.user_id.unique().tolist()
+    ry = ratingdf['user_id'].error.value_counts()
+    data = [go.Bar(
+            x = rx,
+            y = ry
+    )]
+    py.plot(data, filename='basic-bar')
 
 dataset_name ='ml-100k'
 # dataset_name ='jester'
@@ -232,7 +263,7 @@ save = False
 binary=True
 data = Dataset.load_builtin(dataset_name)
 trainset, testset = train_test_split(data,random_state=100, test_size=.2)
-testset = trainset.build_testset()
+# testset = trainset.build_testset()
 algo_name = 'SVD_'
 algo = SVD(n_factors= n_factors, random_state=100)
 final_algo = SVD(n_factors= n_factors, random_state=100)
@@ -257,33 +288,34 @@ accuracy.rmse(predictions)
 accuracy.mae(predictions)
 
 df = pd.DataFrame(predictions, columns=['user_id', 'item_id', 'ratings_ui', 'estimated_Ratings', 'details'])
-def get_Iu(uid):
-    """Return the number of items rated by given user"""
-    try:
-        return len(trainset.ur[trainset.to_inner_uid(uid)])
-    except ValueError:  # user was not part of the trainset
-        return 0
+# def get_Iu(uid):
+#     """Return the number of items rated by given user"""
+#     try:
+#         return len(trainset.ur[trainset.to_inner_uid(uid)])
+#     except ValueError:  # user was not part of the trainset
+#         return 0
     
-def get_Ui(iid):
-    """Return the number of users that have rated given item"""
-    try:
-        return len(trainset.ir[trainset.to_inner_iid(iid)])
-    except ValueError:  # item was not part of the trainset
-        return 0 
-df['Ui'] = df.user_id.apply(get_Iu)
-df['Iu'] = df.item_id.apply(get_Ui)
-df['ERROR IN PREDICTION'] = abs(df.estimated_Ratings - df.ratings_ui)
-# df['trust'] = myalgo.single_user_trust(df.user_id, df.item_id)
+# def get_Ui(iid):
+#     """Return the number of users that have rated given item"""
+#     try:
+#         return len(trainset.ir[trainset.to_inner_iid(iid)])
+#     except ValueError:  # item was not part of the trainset
+#         return 0 
+# df['Ui'] = df.user_id.apply(get_Iu)
+# df['Iu'] = df.item_id.apply(get_Ui)
+df['error'] = abs(df.estimated_Ratings - df.ratings_ui)
 t = []
 est_t = []
 i_count_list = []
 u_count_list = []
 pairtrust_list = []
-# df['trust'] = df.apply(lambda row: myalgo.single_user_trust(row['user_id'], row['item_id']), axis=1)
+ir_trust_list = []
 for index, row in df.iterrows():
     val = myalgo.single_user_trust(row['user_id'], row['item_id'])
     esttr = myalgo.single_user_item_est_trust(row['user_id'], row['item_id'])
+    # print(str(row['user_id'])+str(row['item_id']))
     ucount, icount, pairtrust = myalgo.any_pair_trust(row['user_id'], row['item_id'])
+    ir_trust_list.append(myalgo.single_item_trust_ir_ur(row['user_id'], row['item_id']))
     t.append(val)
     i_count_list.append(icount)
     u_count_list.append(ucount)
@@ -294,24 +326,26 @@ df['est_trust'] = est_t
 df['u_count'] = u_count_list
 df['i_count'] = i_count_list
 df['pairtrust'] = pairtrust_list
+df['ir_trust'] = ir_trust_list
 
 print(df.head())
-best_predictions = df.sort_values(by='ERROR IN PREDICTION')[:10]
+best_predictions = df.sort_values(by='error')[:10]
 print('best_predictions')
 print(best_predictions)
-worst_predictions = df.sort_values(by='ERROR IN PREDICTION')[-10:]
+worst_predictions = df.sort_values(by='error')[-10:]
 print('worst_predictions')
 print(worst_predictions)
 
 taining_predictions = df[df['trust'] > 0]
 print('taining_predictions')
-print(taining_predictions[:10])
+print(taining_predictions.sort_values(by='error')[-10:])
 
 print(dataset_name)
 print('compare ='+str(compare))
 print('binary')
 print(str(binary))
 # print(df.loc[df['user_id'] == '812'])
+graph_by_py(df)
 
 if save:
 	dump('results/'+algo_name+dataset_name+'_n_factors_'+str(n_factors)+'_n_epochs_'+str(n_epochs)+'compare'+str(compare), predictions=predictions, algo=myalgo, verbose=1)
