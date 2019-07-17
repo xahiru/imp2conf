@@ -1,10 +1,4 @@
 from surprise import AlgoBase
-from surprise import SVD
-from surprise import SVDpp
-from surprise import SVDppimp
-from surprise import accuracy
-from surprise import Dataset
-from surprise.model_selection import train_test_split
 from collections import defaultdict
 import copy as cp
 from surprise.dump import dump
@@ -16,7 +10,7 @@ import plotly.plotly as py
 
 class ImpliciTrust(AlgoBase):
 
-    def __init__(self, trainset, testset, algo, final_algo, compare=None, binary=True, parellel=False, random_state=100):
+    def __init__(self, trainset, testset, algo, final_algo, compare=None, binary=True, orginal_binary=False, parellel=False, random_state=100):
 
         # Always call base method before doing anything.
         AlgoBase.__init__(self)
@@ -34,26 +28,52 @@ class ImpliciTrust(AlgoBase):
         self.random_state = random_state
         self.pu = []
         self.qu = []
-        # self.t_all_rating =  pd.DataFrame(trainset.all_ratings(), columns=['user_id', 'item_id', 'rating'])
+        self.orginal_binary = orginal_binary
         self.compare = compare if compare is not None else 0
  
     def fit(self, trainset):
         print('fitting')
+        if self.orginal_binary:
+            print('converting orginal rating to binary')
+            self.convert_all_to_binary(trainset) 
         self.final_algo.fit(self.final_algo_trainset)
-        if compare != 4:
+
+        if self.compare != 4:
             print('copying')
             self.orginal_pu = cp.deepcopy(self.final_algo.pu)
             self.orginal_qi = cp.deepcopy(self.final_algo.qi)
-            print('new trust')
+            print('calculating trust for all DataFrame')
             self.t_all_rating = self.get_all_rating_trust(self.trainset2)
-            print('setting ur n ir')
+            print('setting trust values to trainset.ur n trainset.ir')
             self.set_ur_new(self.trainset, self.t_all_rating)
             self.set_ir_new(self.trainset, self.t_all_rating)
-            print('final fit')
+            print('fitting self.algo to create self.pu n self.qi (trust pu n qi)final fit')
             self.algo.fit(self.trainset)
             self.pu = cp.deepcopy(self.algo.pu)
             self.qi = cp.deepcopy(self.algo.qi)
             print('done fitting with modified trainset')
+            print('init complete')
+
+    def convert_all_to_binary(self, trainset):
+        ir = defaultdict(list)
+        for item_x, x_ir_list in trainset.ir.items():
+            item_list = []
+            for user, rating in x_ir_list:
+                item_list.append((user,1))
+                ir[item_x] = item_list
+        self.final_algo_trainset.ir = ir
+        print('ir to binary done')
+        
+        ur = defaultdict(list)
+        for user_x, x_ur_list in trainset.ur.items():
+            user_list = []
+            for item, rating in x_ur_list:
+                user_list.append((item, 1))
+            ur[user_x] = user_list
+        self.final_algo_trainset.ur = ur
+        print('ur to binary done')
+        print('done all_ratings to binary')
+
 
     def set_ur(self, trainset, binary=True):
         ir = defaultdict(list)
@@ -117,8 +137,8 @@ class ImpliciTrust(AlgoBase):
             # df['nbitem_popc'] = df.rating/df.i_count
         
         df['item_pop'] = df.i_count/trainset.n_items
-        # df['trust'] = df.u_pop *  (1 - df.item_pop)
-        df['trust'] = 1
+        df['trust'] = df.u_pop *  (1 - df.item_pop)
+        # df['trust'] = 1
         # print(df)
         return df
         
@@ -192,7 +212,6 @@ class ImpliciTrust(AlgoBase):
             #     print(i_count_df.i_count.values[0])
             # print(i_count_df)
             i_count = i_count_df.i_count.values[0]
-            # print(i_count)
             if binary:
                 u_pop = 1/u_count
             item_pop = i_count/self.trainset.n_items
@@ -252,101 +271,4 @@ def graph_by_py(ratingdf):
     )]
     py.plot(data, filename='basic-bar')
 
-dataset_name ='ml-100k'
-# dataset_name ='jester'
-# dataset_name ='ml-1m'
-# dataset_name ='ml-latest-small'
-compare = 3
-n_factors = 20
-n_epochs = 20
-save = False
-binary=True
-data = Dataset.load_builtin(dataset_name)
-trainset, testset = train_test_split(data,random_state=100, test_size=.2)
-# testset = trainset.build_testset()
-algo_name = 'SVD_'
-algo = SVD(n_factors= n_factors, random_state=100)
-final_algo = SVD(n_factors= n_factors, random_state=100)
-print('start')
-myalgo = ImpliciTrust(trainset, testset, algo, final_algo, compare=compare, binary=binary)
-myalgo.fit(trainset)
-print(dataset_name)
-print('compare ='+str(compare))
-# myalgo.single_user_trust(543, 249)
-# myalgo.single_item_trustlist(249)
-print('myalgo.pu')
-print(myalgo.pu)
-print('myalgo.qi')
-print(myalgo.qi)
-print('binary')
-print(str(binary))
-
-
-predictions = myalgo.test(testset)
-
-accuracy.rmse(predictions)
-accuracy.mae(predictions)
-
-df = pd.DataFrame(predictions, columns=['user_id', 'item_id', 'ratings_ui', 'estimated_Ratings', 'details'])
-# def get_Iu(uid):
-#     """Return the number of items rated by given user"""
-#     try:
-#         return len(trainset.ur[trainset.to_inner_uid(uid)])
-#     except ValueError:  # user was not part of the trainset
-#         return 0
-    
-# def get_Ui(iid):
-#     """Return the number of users that have rated given item"""
-#     try:
-#         return len(trainset.ir[trainset.to_inner_iid(iid)])
-#     except ValueError:  # item was not part of the trainset
-#         return 0 
-# df['Ui'] = df.user_id.apply(get_Iu)
-# df['Iu'] = df.item_id.apply(get_Ui)
-df['error'] = abs(df.estimated_Ratings - df.ratings_ui)
-t = []
-est_t = []
-i_count_list = []
-u_count_list = []
-pairtrust_list = []
-ir_trust_list = []
-for index, row in df.iterrows():
-    val = myalgo.single_user_trust(row['user_id'], row['item_id'])
-    esttr = myalgo.single_user_item_est_trust(row['user_id'], row['item_id'])
-    # print(str(row['user_id'])+str(row['item_id']))
-    ucount, icount, pairtrust = myalgo.any_pair_trust(row['user_id'], row['item_id'])
-    ir_trust_list.append(myalgo.single_item_trust_ir_ur(row['user_id'], row['item_id']))
-    t.append(val)
-    i_count_list.append(icount)
-    u_count_list.append(ucount)
-    pairtrust_list.append(pairtrust)
-    est_t.append(esttr)
-df['trust'] = t
-df['est_trust'] = est_t
-df['u_count'] = u_count_list
-df['i_count'] = i_count_list
-df['pairtrust'] = pairtrust_list
-df['ir_trust'] = ir_trust_list
-
-print(df.head())
-best_predictions = df.sort_values(by='error')[:10]
-print('best_predictions')
-print(best_predictions)
-worst_predictions = df.sort_values(by='error')[-10:]
-print('worst_predictions')
-print(worst_predictions)
-
-taining_predictions = df[df['trust'] > 0]
-print('taining_predictions')
-print(taining_predictions.sort_values(by='error')[-10:])
-
-print(dataset_name)
-print('compare ='+str(compare))
-print('binary')
-print(str(binary))
-# print(df.loc[df['user_id'] == '812'])
-graph_by_py(df)
-
-if save:
-	dump('results/'+algo_name+dataset_name+'_n_factors_'+str(n_factors)+'_n_epochs_'+str(n_epochs)+'compare'+str(compare), predictions=predictions, algo=myalgo, verbose=1)
 
