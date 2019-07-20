@@ -39,20 +39,72 @@ class ImpliciTrust(AlgoBase):
         self.final_algo.fit(self.final_algo_trainset)
 
         if self.compare != 4:
-            print('copying')
-            self.orginal_pu = cp.deepcopy(self.final_algo.pu)
-            self.orginal_qi = cp.deepcopy(self.final_algo.qi)
-            print('calculating trust for all DataFrame')
-            self.t_all_rating = self.get_all_rating_trust(self.trainset2)
-            print('setting trust values to trainset.ur n trainset.ir')
-            self.set_ur_new(self.trainset, self.t_all_rating)
-            self.set_ir_new(self.trainset, self.t_all_rating)
-            print('fitting self.algo to create self.pu n self.qi (trust pu n qi)final fit')
-            self.algo.fit(self.trainset)
-            self.pu = cp.deepcopy(self.algo.pu)
-            self.qi = cp.deepcopy(self.algo.qi)
-            print('done fitting with modified trainset')
-            print('init complete')
+            if self.compare == 5:
+                print('copying for future use, if needed')
+                self.orginal_pu = cp.deepcopy(self.final_algo.pu)
+                self.orginal_qi = cp.deepcopy(self.final_algo.qi)
+                print('changing last col of final_algo.pu')
+                '''
+                add 1 to pu if trust dimension is 1xqi and add trust to qi
+                else add 1s to qi and add trust to qu 
+                otherwise add 1s trust and  trust n 1s to pu n qi respectively
+                '''
+                #just trust between users
+                # self.final_algo.qi.append(1) 
+                # self.final_algo.qu.append(users_trust)
+                print('calculating trust for all DataFrame')
+                self.t_all_rating = self.get_all_rating_trust(self.trainset2, self.binary)
+                self.trust_df = cp.deepcopy(self.t_all_rating)
+                
+                # print(self.trust_df.groupby(['user_id']).mean().trust.values.tolist())
+                # print(self.trust_df.groupby(['item_id']).mean().trust.values.tolist())
+                list_tu = self.trust_df.groupby(['user_id']).mean().trust.values.tolist()
+                new_pu_list = []
+                counter = 0
+                for t2 in self.orginal_pu:
+                    templist = []
+                    for x in t2:
+                        templist.append(x)
+                    templist.append(list_tu[counter])
+                    templist.append(1)
+                    counter =+ 1
+                    new_pu_list.append(templist)
+                    # print(templist)
+                self.orginal_pu = new_pu_list
+
+                list_qi = self.trust_df.groupby(['item_id']).mean().trust.values.tolist()
+                new_qi_list = []
+                counter = 0
+                for t2 in self.orginal_qi:
+                    templist = []
+                    for x in t2:
+                        templist.append(x)
+                    templist.append(1)
+                    templist.append(list_tu[counter])
+                    counter =+ 1
+                    new_qi_list.append(templist)
+                    # print(templist)
+                self.orginal_qi = new_qi_list
+                self.pu = cp.deepcopy(self.orginal_qi)
+                self.qi = cp.deepcopy(self.orginal_qi)
+                self.algo.pu = self.pu
+                self.algo.qi = self.qi
+
+            else:
+                print('copying')
+                self.orginal_pu = cp.deepcopy(self.final_algo.pu)
+                self.orginal_qi = cp.deepcopy(self.final_algo.qi)
+                print('calculating trust for all DataFrame')
+                self.t_all_rating = self.get_all_rating_trust(self.trainset2, self.binary)
+                print('setting trust values to trainset.ur n trainset.ir')
+                self.set_ur_new(self.trainset, self.t_all_rating)
+                self.set_ir_new(self.trainset, self.t_all_rating)
+                print('fitting self.algo to create self.pu n self.qi (trust pu n qi)final fit')
+                self.algo.fit(self.trainset)
+                self.pu = cp.deepcopy(self.algo.pu)
+                self.qi = cp.deepcopy(self.algo.qi)
+                print('done fitting with modified trainset')
+                print('init complete')
 
     def convert_all_to_binary(self, trainset):
         ir = defaultdict(list)
@@ -194,7 +246,7 @@ class ImpliciTrust(AlgoBase):
         except ValueError:  # user was not part of the trainset
             return 0
 
-    def any_pair_trust(self, u, i, binary=True):
+    def any_pair_trust(self, u, i, r, binary=True):
         df = cp.deepcopy(self.t_all_rating)
         df2 = cp.deepcopy(self.t_all_rating)
         i_count = 0
@@ -214,6 +266,8 @@ class ImpliciTrust(AlgoBase):
             i_count = i_count_df.i_count.values[0]
             if binary:
                 u_pop = 1/u_count
+            else:
+                u_pop = r/u_count
             item_pop = i_count/self.trainset.n_items
             trust = item_pop * (1 - u_pop)
             # print('u_count '+str(u_count) + 'i_count '+str(i_count)+ 'trust ' + str(trust))
@@ -261,6 +315,12 @@ class ImpliciTrust(AlgoBase):
         if self.compare == 4:
             #baseline
             return self.final_algo.estimate(u,i)
+        if self.compare == 5:
+            #trust as bias
+            self.final_algo.pu = self.orginal_pu
+            self.final_algo.qi = self.orginal_qi
+            return self.final_algo.estimate(u,i)
+            
 
 def graph_by_py(ratingdf):
     rx = ratingdf.user_id.unique().tolist()
@@ -271,4 +331,36 @@ def graph_by_py(ratingdf):
     )]
     py.plot(data, filename='basic-bar')
 
+class Binarybaseline(AlgoBase):
+    def __init__(self, algo, binary=True, random_state=100):
+        AlgoBase.__init__(self)
+        self.algo = algo
+        self.binary = binary
+    def fit(self, trainset):
+        self.trainset = trainset
+        if self.binary:
+            self.trainset = self.convert_all_to_binary(trainset)
+        self.algo.fit(self.trainset)
+        print('fitting')
+    def convert_all_to_binary(self, trainset):
+        ir = defaultdict(list)
+        for item_x, x_ir_list in trainset.ir.items():
+            item_list = []
+            for user, rating in x_ir_list:
+                item_list.append((user,1))
+                ir[item_x] = item_list
+        trainset.ir = ir
+        print('ir to binary done')
+        ur = defaultdict(list)
+        for user_x, x_ur_list in trainset.ur.items():
+            user_list = []
+            for item, rating in x_ur_list:
+                user_list.append((item, 1))
+            ur[user_x] = user_list
+        trainset.ur = ur
+        print('ur to binary done')
+        print('done all_ratings to binary')
+        return trainset
+    def estimate(self, u, i):
+        return self.algo.estimate(u, i)
 
