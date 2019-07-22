@@ -32,8 +32,6 @@ class ImpliciTrust(AlgoBase):
         self.biased = biased
         self.orginal_binary = orginal_binary
         self.compare = compare if compare is not None else 0
-        if orginal_binary:
-            self.trainset._global_mean = 1
  
     def fit(self, trainset):
         print('fitting')
@@ -164,7 +162,6 @@ class ImpliciTrust(AlgoBase):
         self.final_algo_trainset.ur = ur
         print('ur to binary done')
         print('done all_ratings to binary')
-
 
     def set_ur(self, trainset, binary=True):
         ir = defaultdict(list)
